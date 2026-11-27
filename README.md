@@ -44,7 +44,7 @@ Pi has the repo's code and reads untrusted content: the repo, web pages, package
 
 - **Network:** the VM has no network card. Its traffic reaches the outside only through OpenShell's supervisor, which allows only the API endpoints of the sandbox's providers, Git fetches and pushes for the one repo on GitHub, and read-only requests (`GET`, `HEAD`, `OPTIONS`) to the hosts in `policy.yaml`.
 - **Keys:** real API keys and the GitHub token stay with OpenShell. Pi sees placeholders.
-- **The Mac:** nothing is mounted into the VM, and Pi and its tools are installed and run only in the VM. Code comes in and goes out only through the repo on GitHub, where Pi's branches can be reviewed in pull requests before anything from them is merged or run. GitHub keeps Pi off the default branch only if the repo has a ruleset for it ([Set up your repo](#set-up-your-repo)). Without one, Pi can push there directly, and nothing requires a review.
+- **The Mac:** nothing is mounted into the VM, and Pi and its tools are installed and run only in the VM and in the Docker build of its image. Code comes in and goes out only through the repo on GitHub, where Pi's branches can be reviewed in pull requests before anything from them is merged or run. GitHub keeps Pi off the default branch only if the repo has a ruleset for it ([Set up your repo](#set-up-your-repo)). Without one, Pi can push there directly, and nothing requires a review.
 
 What this does **not** protect against, in short ([the full list](docs/security.md#what-this-does-not-protect-against)):
 

@@ -3,7 +3,7 @@
 # `pi-sandbox run` sets Pi's env vars when it creates the sandbox.
 
 # node:24-trixie-slim, pinned by digest. Pi needs Node >= 22.19.
-FROM node:24-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4
+FROM node:24-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4 AS base
 
 # fd and ripgrep are preinstalled because PI_OFFLINE=1 (set by pi-sandbox) turns
 # off Pi's own download of them.
@@ -44,36 +44,33 @@ RUN usermod -l sandbox -d /sandbox node && groupmod -n sandbox node \
     && chmod 777 /var/lib/pi-agent
 
 # The personal Pi config from pi-agent/personal/, of which .dockerignore lets in
-# only the config files (docs/adr/0006-personal-pi-config.md). It comes before
-# the image's own files, so that those replace files at the same paths.
-# Pi installs the npm and git packages that settings.json lists; local paths
-# need no install. Node writes the list to a file first, so that invalid JSON
-# fails the build, as does a package that can't be installed. npm's install
-# scripts stay off, as for every other install in the image, and </dev/null
-# keeps npm and git from reading the list.
-# The files are made readable for all, and what is written later writable for
-# all (settings.json and the package folders by Pi, extensions/ by Orca),
-# because owners don't survive (comment above).
+# only the config files (docs/adr/0006-personal-pi-config.md). Pi installs the
+# npm and git packages that settings.json lists, and the build fails if one
+# can't be installed; local paths need no install. npm's install scripts and
+# git dependencies stay off, but a git package's own .npmrc still configures
+# npm. So this runs in a stage of its own, and the image takes only Pi's config
+# folder from it.
+# The files are made readable and writable for all, because owners don't
+# survive (comment above).
+FROM base AS personal
 COPY pi-agent/personal/ /var/lib/pi-agent/
 RUN if [ -f /var/lib/pi-agent/settings.json ]; then \
-        node -e ' \
-            const settings = JSON.parse(fs.readFileSync("/var/lib/pi-agent/settings.json", "utf8")); \
-            for (const entry of settings.packages ?? []) { \
-                const source = entry.source ?? entry; \
-                if (source.match(/^(npm|git|https?|ssh):/)) console.log(source); \
+        PI_CODING_AGENT_DIR=/var/lib/pi-agent PI_TELEMETRY=0 \
+        npm_config_ignore_scripts=true npm_config_allow_git=none node -e ' \
+            const sources = (require("/var/lib/pi-agent/settings.json").packages ?? []) \
+                .map((entry) => entry.source ?? entry) \
+                .filter((source) => source.match(/^(npm|git|https?|ssh):/)); \
+            for (const source of sources) { \
+                child_process.execFileSync("pi", ["install", source], { stdio: "inherit" }); \
             } \
-        ' >/tmp/pi-packages \
-        && while IFS= read -r source; do \
-            PI_CODING_AGENT_DIR=/var/lib/pi-agent PI_TELEMETRY=0 npm_config_ignore_scripts=true \
-                pi install "$source" </dev/null || exit 1; \
-        done </tmp/pi-packages \
-        && rm /tmp/pi-packages \
-        && npm cache clean --force; \
+        '; \
     fi \
-    && chmod -R a+rX /var/lib/pi-agent \
-    && for path in settings.json npm git extensions; do \
-        if [ -e "/var/lib/pi-agent/$path" ]; then chmod -R a+w "/var/lib/pi-agent/$path"; fi; \
-    done
+    && chmod -R a+rwX /var/lib/pi-agent
+
+# The personal config comes before the image's own files, so that those replace
+# files at the same paths.
+FROM base
+COPY --from=personal /var/lib/pi-agent/ /var/lib/pi-agent/
 
 # Pi's skills, with the npm dependencies of those that have a lockfile, and
 # Pi's global context file. That file is named sandbox-context.md in the repo,

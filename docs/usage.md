@@ -44,7 +44,7 @@ The image takes only config files from the folder: settings, keybindings, MCP se
 
 `pi-sandbox setup` builds the image with the folder; run it again after each change. Only sandboxes created after that get the change.
 
-Packages ([Pi packages](https://docs.pi.dev/latest/packages)) go under `packages` in `settings.json`, pinned: `npm:NAME@VERSION` or `git:github.com/OWNER/REPO@COMMIT`. `pi-sandbox setup` installs them, and fails if one can't be installed. Their install scripts don't run, so a package that needs a build step, such as one with a native module, doesn't work.
+Packages ([Pi packages](https://docs.pi.dev/latest/packages)) go under `packages` in `settings.json`, pinned: `npm:NAME@VERSION` or `git:github.com/OWNER/REPO@COMMIT`. `pi-sandbox setup` installs them, and fails if one can't be installed. Their install scripts don't run, so a package that needs a build step, such as one with a native module, doesn't work. Neither does a package with a dependency from git: the build fails on it.
 
 What doesn't carry over from the Mac:
 - Symlinks: they are copied as links, so one that points outside the folder leads nowhere.
