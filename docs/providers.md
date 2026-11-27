@@ -5,7 +5,7 @@ How to register the providers a sandbox uses, add models and rotate a key.
 A provider is two things under one name, for example `scaleway`:
 
 - In OpenShell: an allow rule for one service's API, with the service's key if it has one. It is made from a profile (`providers/*.yaml`).
-- In Pi: the list of a model provider's models. It is an entry in `models.json`, or built into Pi for Anthropic and Mistral.
+- In Pi: the list of a model provider's models. It is an entry in `models.json`, or built into Pi.
 
 A model provider serves a model. The other providers are for Git and web search.
 
@@ -74,7 +74,7 @@ unset ANTHROPIC_API_KEY
 
 ## Mistral (`mistral`)
 
-Mistral's models. In the Mistral console, create an API key with an expiry date. Pi has the Mistral models built in, those of its version in `Dockerfile.pi`; for newer ones, upgrade Pi ([Upgrading](troubleshooting.md#upgrading)). The provider allows only `POST /v1/chat/completions`, the one call Pi makes.
+In Mistral's Admin Panel, create a workspace with a monthly spending limit, and an API key in it, with an expiry date. Share no connectors with that workspace: code in the VM could use them. Pi has the Mistral models built in, those of its version in `Dockerfile.pi`; for newer ones, upgrade Pi ([Upgrading](troubleshooting.md#upgrading)). The provider allows only `POST /v1/chat/completions`.
 
 ```sh
 read -rs "MISTRAL_API_KEY?Key: "; echo

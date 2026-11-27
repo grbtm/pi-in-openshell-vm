@@ -1,7 +1,6 @@
 # Mistral's Chat Completions API, for Pi's built-in mistral provider. The key
-# works only for POST /v1/chat/completions, the one call Pi makes. The path has
-# no wildcard, so Mistral's other APIs, such as /v1/conversations and
-# /v1/files, stay blocked.
+# works only for POST /v1/chat/completions, the one call Pi makes; Mistral's
+# other APIs stay blocked.
 
 id: mistral
 display_name: Mistral Chat Completions API
@@ -11,7 +10,7 @@ inference_capable: true
 
 credentials:
   - name: api_key
-    description: Mistral API key (with an expiry date)
+    description: Mistral API key (in a workspace with a spending limit)
     env_vars:
       - MISTRAL_API_KEY
     required: true
