@@ -3,7 +3,7 @@
 # `pi-sandbox run` sets Pi's env vars when it creates the sandbox.
 
 # node:24-trixie-slim, pinned by digest. Pi needs Node >= 22.19.
-FROM node:24-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4
+FROM node:26-trixie-slim@sha256:abe7e5a82b61a8ef67b315b85497c9e65173387ccf2f4a029248184b8e020be5
 
 # fd and ripgrep are preinstalled because PI_OFFLINE=1 (set by pi-sandbox) turns
 # off Pi's own download of them.
