@@ -36,6 +36,25 @@ Pi loads a context file, a file of instructions, into every session. The image c
 
 When your repo has settings or resources in `.pi/` or `.agents/skills`, Pi asks whether to trust it ([Pi's project trust](https://docs.pi.dev/latest/security)). Trusting lets the repo's extensions run in Pi and its skills steer it; it doesn't change what the VM allows. Answer "Trust" only for repos whose `.pi/` and `.agents/` you review in pull requests. Never answer "Trust parent folder". Pi saves the answer for the folder and every folder below it, and it also covers every branch checked out there later. Context files (`AGENTS.md`, `CLAUDE.md`) load whether you trust the repo or not.
 
+## Personal Pi config
+
+Every sandbox starts with Pi's defaults. To bring your own settings, skills, extensions and packages into every sandbox, put them into `pi-agent/personal/` in your clone of this repo, laid out as Pi's config folder `~/.pi/agent` ([Pi's configuration](https://docs.pi.dev/latest/configuration)). Git ignores the folder's content.
+
+The image takes only config files from the folder: settings, keybindings, MCP servers, system prompts, extensions, skills, prompt templates and themes. `.dockerignore` has the names. Everything else stays out, including Pi's credentials and state, `models.json` and `AGENTS.md`. Put your own instructions into `APPEND_SYSTEM.md`.
+
+`pi-sandbox setup` builds the image with the folder; run it again after each change. Only sandboxes created after that get the change.
+
+Packages ([Pi packages](https://docs.pi.dev/latest/packages)) go under `packages` in `settings.json`, pinned: `npm:NAME@VERSION` or `git:github.com/OWNER/REPO@COMMIT`. `pi-sandbox setup` installs them, and fails if one can't be installed. Their install scripts don't run, so a package that needs a build step, such as one with a native module, doesn't work.
+
+What doesn't carry over from the Mac:
+- Symlinks: they are copied as links, so one that points outside the folder leads nowhere.
+- Modules built on macOS, such as native code in an extension's `node_modules`.
+- Paths outside the folder, such as a package or skill listed by a path in your home folder.
+
+The folder's content is yours to review: it runs in every new sandbox from its first start, without a pull request, and can change what Pi does there ([Security](security.md#what-this-does-not-protect-against)). Code in the VM can read its files and send them out, so keep keys out of them, `mcp.json` and `settings.json` included: credentials go into OpenShell's [providers](providers.md).
+
+The folder can also turn off the trust prompt above: with `defaultProjectTrust: "always"` in `settings.json`, Pi loads the `.pi/` and `.agents/skills` of every repo and branch in the sandbox without asking. A branch's extensions then run in Pi and its skills steer it as soon as Pi starts there. Leave the setting at its default, `"ask"`.
+
 ## Getting the results out
 
 Pi commits on a branch of its own, pushes it to `origin` and tells you the branch name. To push a branch yourself, open a shell with `pi-sandbox shell` and run `git push origin BRANCH`. Then, on the Mac:

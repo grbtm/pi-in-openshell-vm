@@ -81,7 +81,7 @@ echo 'export PATH="$PATH:$HOME/pi-in-openshell-vm"' >> ~/.zshrc && source ~/.zsh
 pi-sandbox setup
 ```
 
-`pi-sandbox setup` builds the `pi-agent:local` image from `Dockerfile.pi` and `pi-agent/` (Pi's skills, the instructions it loads into every session, and the Git settings for the VM). Every VM boots from this image. Run `pi-sandbox setup` again after changing either.
+`pi-sandbox setup` builds the `pi-agent:local` image from `Dockerfile.pi` and `pi-agent/` (Pi's skills, the instructions it loads into every session, the Git settings for the VM, and a [personal Pi config](docs/usage.md#personal-pi-config) in `pi-agent/personal/`, if there is one). Every VM boots from this image. Run `pi-sandbox setup` again after changing either.
 
 ### 3. Switch the gateway to the microVM backend
 
@@ -162,7 +162,7 @@ Details, including Pi's trust prompt: [Using a sandbox](docs/usage.md).
 
 ## More
 
-- [Using a sandbox](docs/usage.md): what `pi-sandbox run` checks and sets up, Pi's trust prompt, merging only the commit you reviewed, stopping and restarting a sandbox.
+- [Using a sandbox](docs/usage.md): what `pi-sandbox run` checks and sets up, Pi's trust prompt, a personal Pi config, merging only the commit you reviewed, stopping and restarting a sandbox.
 - [Providers](docs/providers.md): keys and setup for each provider, other models, thinking levels, rotating a key.
 - [Security](docs/security.md): everything this does not protect against, reviewing Pi's pull requests, allowing another host, checking a sandbox.
 - [Using Orca](docs/orca.md): running Pi from the Orca desktop app, over SSH.

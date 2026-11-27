@@ -10,7 +10,7 @@ Data like this may come up while working, for example in command output or logs.
 
 ## Layout
 
-`pi-sandbox` creates and opens the sandboxes, with `policy.yaml` as their base policy, the OpenShell provider profiles in `providers/` and Pi's models in `models.json`. `Dockerfile.pi` and `pi-agent/` (Pi's context file, skills and Git settings) make the image. `README.md` and `docs/*.md` are for users, `docs/adr/` has the design decisions, and `.agents/skills/review` reviews a change.
+`pi-sandbox` creates and opens the sandboxes, with `policy.yaml` as their base policy, the OpenShell provider profiles in `providers/` and Pi's models in `models.json`. `Dockerfile.pi` and `pi-agent/` (Pi's context file, skills and Git settings, and in `personal/` the user's personal Pi config, which Git ignores) make the image. `README.md` and `docs/*.md` are for users, `docs/adr/` has the design decisions, and `.agents/skills/review` reviews a change.
 
 ## Checks
 
