@@ -16,7 +16,7 @@ Every sandbox needs `github-git` and one model provider; `pi-sandbox run` also a
 | `github-git` | Git in the VM: cloning, fetching and pushing your repo. Required. | `PI_GITHUB_TOKEN` |
 | `scaleway` | Hosted open-weight models. The default model provider of `pi-sandbox run`. | `SCW_SECRET_KEY` |
 | `anthropic` | Claude models. | `ANTHROPIC_API_KEY` |
-| `mistral` | Mistral's models. | `MISTRAL_API_KEY` |
+| `mistral` | Models hosted by Mistral. | `MISTRAL_API_KEY` |
 | `llama-server` | A local model. | none |
 | `kagi` | Web search. Optional. | `KAGI_API_KEY` |
 
