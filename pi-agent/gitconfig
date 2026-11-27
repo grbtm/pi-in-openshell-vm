@@ -1,0 +1,16 @@
+# Installed as /etc/gitconfig, Git's config for every repo in the VM.
+
+# The hook that marks Pi's commits with an Assisted-by trailer
+# (docs/adr/0001-orca-via-ssh.md, "Git identity"). Hooks in a repo's
+# .git/hooks then don't run in the VM, and a repo that sets core.hooksPath
+# itself (as husky does on `npm install`) replaces this hook.
+[core]
+	hooksPath = /etc/git-hooks
+
+# For github.com, Git sends PI_GITHUB_TOKEN as the password
+# (docs/adr/0004-git-host.md). In the VM it holds a placeholder, which
+# OpenShell replaces with the real token. The helper answers only "get", and
+# nothing when the variable is empty, so Git then fails instead of sending an
+# empty password.
+[credential "https://github.com"]
+	helper = "!f() { test \"$1\" = get || return 0; test -n \"$PI_GITHUB_TOKEN\" || return 0; printf 'username=x-access-token\\npassword=%s\\n' \"$PI_GITHUB_TOKEN\"; }; f"

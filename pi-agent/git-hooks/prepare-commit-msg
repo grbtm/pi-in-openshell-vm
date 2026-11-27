@@ -1,0 +1,12 @@
+#!/bin/sh
+# Installed in /etc/git-hooks (see pi-agent/gitconfig). Marks commits made by
+# Pi with its provider, model and thinking level, which Pi passes to the
+# commands it runs. Commits made outside Pi stay as they are, and so does an
+# empty message, so that Git still aborts that commit.
+[ -n "${PI_MODEL:-}" ] || exit 0
+[ -n "$(git stripspace --strip-comments <"$1")" ] || exit 0
+trailer="Assisted-by: Pi:$PI_PROVIDER/$PI_MODEL (thinking: $PI_REASONING_LEVEL)"
+# --no-divider: the file is a commit message, where a "---" line is text and
+# not the start of a patch.
+git interpret-trailers --in-place --no-divider --if-exists addIfDifferent \
+  --trailer "$trailer" "$1"

@@ -1,0 +1,33 @@
+# Scaleway's Generative APIs, OpenAI-compatible, for the scaleway models in
+# models.json. The path is the default project's; docs/providers.md says what
+# to change for another project.
+
+id: scaleway
+display_name: Scaleway Generative APIs
+description: Scaleway Generative APIs (serverless, Paris), OpenAI-compatible
+category: inference
+inference_capable: true
+
+credentials:
+  - name: api_key
+    description: Scaleway API secret key (use an IAM application limited to GenerativeApisModelAccess)
+    env_vars:
+      - SCW_SECRET_KEY
+    required: true
+    auth_style: bearer
+    header_name: authorization
+
+discovery:
+  credentials:
+    - api_key
+
+endpoints:
+  - host: api.scaleway.ai
+    port: 443
+    path: /v1/**
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+
+binaries:
+  - /usr/local/bin/node

@@ -1,0 +1,43 @@
+# GitHub over HTTPS, for Git in the VM (docs/adr/0004-git-host.md). The
+# token is used only on github.com. This profile is shared by every sandbox and
+# allows Git only to read: it can list a repo's branches, but not fetch or
+# push, which take a POST to OWNER/REPO.git/git-upload-pack or
+# git-receive-pack. `pi-sandbox run` allows those for the sandbox's own repo
+# only. The token still goes out with every read, so it should cover only that
+# repo: what other reads return for a token that covers more is an open test in
+# the ADR.
+
+id: github-git
+display_name: GitHub (Git over HTTPS)
+description: A GitHub token for Git in the VM, on github.com only
+category: source_control
+inference_capable: false
+
+credentials:
+  - name: api_token
+    description: Fine-grained token with read and write access to the contents of the one repo Pi works on
+    # Not GITHUB_TOKEN or GH_TOKEN: tools that read those would send the
+    # placeholder to api.github.com, where OpenShell refuses it.
+    env_vars:
+      - PI_GITHUB_TOKEN
+    required: true
+    auth_style: bearer
+    header_name: authorization
+    # The placeholder stays the same when the token is replaced, so running
+    # processes keep working.
+    stable_placeholder: true
+
+discovery:
+  credentials:
+    - api_token
+
+endpoints:
+  - host: github.com
+    port: 443
+    protocol: rest
+    access: read-only
+    enforcement: enforce
+
+# Git's HTTPS helper is matched through its parent, git.
+binaries:
+  - /usr/bin/git

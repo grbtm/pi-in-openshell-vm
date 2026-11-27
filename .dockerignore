@@ -1,0 +1,4 @@
+# The image needs only Pi's context file, skills and Git config from the build context.
+*
+!pi-agent/
+pi-agent/**/*.test.mjs

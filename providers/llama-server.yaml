@@ -1,0 +1,21 @@
+# Credentialless profile for a llama-server on the Mac, bound to 127.0.0.1:8080.
+# host.openshell.internal maps to the host loopback inside a vm sandbox.
+
+id: llama-server
+display_name: Local llama-server
+description: llama-server running on the host, reached via host.openshell.internal
+category: inference
+inference_capable: true
+
+credentials: []
+
+endpoints:
+  - host: host.openshell.internal
+    port: 8080
+    path: /v1/**
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+
+binaries:
+  - /usr/local/bin/node

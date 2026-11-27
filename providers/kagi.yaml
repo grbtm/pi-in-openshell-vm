@@ -1,0 +1,38 @@
+# Kagi's Search API, for the kagi-search skill (docs/adr/0003-network-access.md).
+# The key works only for POST /api/v1/search: Kagi's other endpoints, such as
+# /api/v1/extract and /api/v0/summarize, fetch any URL on Kagi's servers.
+
+id: kagi
+display_name: Kagi Search API
+description: Kagi web search, limited to POST /api/v1/search
+category: knowledge
+inference_capable: false
+
+credentials:
+  - name: api_key
+    description: Kagi API key (limit it to the Search product, and set a usage limit)
+    env_vars:
+      - KAGI_API_KEY
+    required: true
+    auth_style: bearer
+    header_name: authorization
+
+discovery:
+  credentials:
+    - api_key
+
+endpoints:
+  - host: kagi.com
+    port: 443
+    path: /api/v1/search
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow:
+          method: POST
+          path: /api/v1/search
+
+# node, because the skill runs on node. This doesn't limit which code can use
+# the key: node runs any code. The path rule above is what limits the key.
+binaries:
+  - /usr/local/bin/node

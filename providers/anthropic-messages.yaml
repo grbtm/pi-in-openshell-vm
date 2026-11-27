@@ -1,0 +1,39 @@
+# Anthropic's Messages API, for Pi's built-in anthropic provider
+# (docs/adr/0005-anthropic-provider.md). The key works only for
+# POST /v1/messages, the one call Pi makes. The path has no wildcard, so others,
+# such as /v1/messages/batches, stay blocked. The id isn't `anthropic`, the id of
+# OpenShell's example profile, which gives the key to the whole host: with the
+# same id, the two could be mixed up.
+
+id: anthropic-messages
+display_name: Anthropic Messages API
+description: Anthropic's Claude models, limited to POST /v1/messages
+category: inference
+inference_capable: true
+
+credentials:
+  - name: api_key
+    description: Anthropic API key (in a workspace with a spending limit)
+    env_vars:
+      - ANTHROPIC_API_KEY
+    required: true
+    auth_style: header
+    header_name: x-api-key
+
+discovery:
+  credentials:
+    - api_key
+
+endpoints:
+  - host: api.anthropic.com
+    port: 443
+    path: /v1/messages
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow:
+          method: POST
+          path: /v1/messages
+
+binaries:
+  - /usr/local/bin/node

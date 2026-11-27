@@ -1,0 +1,56 @@
+# Image for `pi-sandbox`. OpenShell's microVM driver turns this image's files
+# into the VM's disk; no container runs. It ignores ENV, USER and WORKDIR:
+# `pi-sandbox run` sets Pi's env vars when it creates the sandbox.
+
+# node:24-trixie-slim, pinned by digest. Pi needs Node >= 22.19.
+FROM node:24-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4
+
+# fd and ripgrep are preinstalled because PI_OFFLINE=1 (set by pi-sandbox) turns
+# off Pi's own download of them.
+# Python is Debian's (/usr/bin/python3.13, named in policy.yaml); packages go
+# into a virtual environment, because Debian's Python refuses `pip install`.
+# Package versions aren't pinned: Debian drops old versions, so pins would break
+# builds. The base image digest fixes the Debian release, and `upgrade` brings
+# the packages that came with it up to Debian's security fixes.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends ca-certificates curl fd-find git python3 python3-venv ripgrep \
+    && ln -s /usr/bin/fdfind /usr/local/bin/fd \
+    && rm -rf /var/lib/apt/lists/*
+
+# `npm install` sends the list of installed packages to the registry's audit
+# service (a POST) to report known vulnerabilities. The sandbox blocks POSTs.
+# npm creates its config file writable for everyone.
+RUN npm config set --global audit false \
+    && chmod 644 /usr/local/etc/npmrc
+
+# Declared after the apt layer, so bumping it doesn't rebuild that layer.
+# Check https://www.npmjs.com/package/@earendil-works/pi-coding-agent before bumping.
+# This pins Pi, not its dependencies (docs/adr/0000-openshell-microvm.md).
+ARG PI_VERSION=1.6.1
+RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}" \
+    && npm cache clean --force
+
+# The VM runs as the image's "sandbox" account (UID 1000) and adds one if the
+# image has none. Renaming node's account avoids two accounts with UID 1000.
+#
+# /var/lib/pi-agent holds Pi's config and sessions (PI_CODING_AGENT_DIR);
+# policy.yaml allows writing there. File owners don't survive the conversion to
+# the VM's disk (only /sandbox is given to the sandbox user), but modes do, so
+# the folder is world-writable.
+RUN usermod -l sandbox -d /sandbox node && groupmod -n sandbox node \
+    && mkdir -p /sandbox /var/lib/pi-agent \
+    && chown sandbox:sandbox /sandbox \
+    && chmod 1777 /var/lib/pi-agent
+
+# Pi's skills, with the npm dependencies of those that have a lockfile, and
+# Pi's global context file. That file is named sandbox-context.md in the repo,
+# so that agents working on the repo don't load it.
+COPY pi-agent/skills/ /var/lib/pi-agent/skills/
+RUN npm ci --prefix /var/lib/pi-agent/skills/kagi-search --omit=dev --ignore-scripts --no-fund \
+    && npm cache clean --force
+COPY pi-agent/sandbox-context.md /var/lib/pi-agent/AGENTS.md
+
+# Git's credential helper for github.com, and the hook that marks Pi's commits.
+COPY pi-agent/gitconfig /etc/gitconfig
+COPY pi-agent/git-hooks/ /etc/git-hooks/

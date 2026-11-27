@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+# pi-sandbox: run the Pi coding agent in an OpenShell microVM sandbox.
+# Run it without arguments for usage. See README.md for the setup, and
+# docs/adr/0001-orca-via-ssh.md and docs/adr/0004-git-host.md for the design.
+
+set -euo pipefail
+
+# Folder of this script, with Dockerfile.pi, policy.yaml and models.json.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+readonly IMAGE="pi-agent:local"
+# The provider with the GitHub token (providers/github-git.yaml).
+readonly GIT_PROVIDER="github-git"
+
+# Paths in the VM. HOME there is /sandbox. The repo is a folder in HOME, not
+# HOME itself, so files that tools write to HOME don't end up in it. Pi's
+# config folder is created by Dockerfile.pi and made writable by policy.yaml.
+readonly WORK_DIR="/sandbox/work"
+readonly PI_DIR="/var/lib/pi-agent"
+
+# --- Helpers ---
+
+# Print a message to stderr. Arguments are joined with spaces.
+warn() {
+  echo "pi-sandbox: $*" >&2
+}
+
+# Print an error message and exit.
+fail() {
+  warn "$@"
+  exit 1
+}
+
+usage() {
+  cat <<EOF
+Usage:
+  pi-sandbox setup                  Build the image.
+  pi-sandbox run [PROVIDER] [NAME]  Create a sandbox with a clone of origin on
+                                    GitHub, on the current branch, and open a
+                                    shell in it. PROVIDER defaults to scaleway.
+  pi-sandbox shell [NAME]           Open another shell in the sandbox.
+  pi-sandbox ssh-config [NAME]      Print the sandbox's SSH config entry, for
+                                    an editor.
+
+NAME defaults to the repo's folder name.
+EOF
+}
+
+# Fail unless the openshell CLI is installed.
+require_openshell() {
+  command -v openshell >/dev/null \
+    || fail "openshell not found; see README, 'One-time setup'"
+}
+
+# Print the sandbox name: $1 if it is given, else one made from the repo's (or
+# current) folder name. A valid name has lowercase letters, digits and single
+# dashes, at most 19 characters, and no dash at either end. The folder name is
+# turned into one; a given name is refused unless it already is one, so that
+# two names never mean the same sandbox.
+name_or_default() {
+  local folder name
+  folder="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  name="$(printf '%s' "${1:-$(basename "$folder")}" \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -c 'a-z0-9-' '-' \
+    | tr -s '-' \
+    | cut -c1-19 \
+    | sed 's/^-*//; s/-*$//')"
+  if [[ -n "${1:-}" && "$name" != "$1" ]]; then
+    fail "'$1' is not a valid sandbox name: use lowercase letters, digits" \
+      "and single dashes, at most 19 characters, no dash at either end"
+  fi
+  [[ -n "$name" ]] \
+    || fail "cannot derive a sandbox name from the folder; pass NAME"
+  printf '%s' "$name"
+}
+
+# --- setup ---
+
+setup() {
+  docker build -t "$IMAGE" -f "$SCRIPT_DIR/Dockerfile.pi" "$SCRIPT_DIR"
+}
+
+# --- run ---
+
+# Print origin's repo on GitHub as OWNER/REPO.git, from its HTTPS or SSH URL.
+# The sandbox's rule and its clone URL are both built from this string: the
+# rule's path is case-sensitive and must match what Git requests. An HTTPS URL
+# can hold credentials, which are left out here, so the URL is never printed.
+github_repo() {
+  local url
+  local https='https://([^/@]*@)?github\.com/'
+  local host="(${https}|git@github\.com:|ssh://git@github\.com/)"
+  local re="^${host}([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)\$"
+  url="$(git remote get-url origin 2>/dev/null)" \
+    || fail "the repo has no remote named origin"
+  url="${url%/}"
+  url="${url%.git}"
+  [[ "$url" =~ $re ]] \
+    || fail "origin is not a repo on github.com" \
+      "(https://github.com/OWNER/REPO or git@github.com:OWNER/REPO)"
+  printf '%s' "${BASH_REMATCH[3]}/${BASH_REMATCH[4]}.git"
+}
+
+# Check that the image and the providers $1 and GIT_PROVIDER exist, and that
+# sandbox $2 doesn't.
+check_prerequisites() {
+  local provider="$1" name="$2" p
+  docker image inspect "$IMAGE" >/dev/null 2>&1 \
+    || fail "image '$IMAGE' not found (is Docker running?);" \
+      "run: pi-sandbox setup"
+  for p in "$provider" "$GIT_PROVIDER"; do
+    openshell provider get "$p" >/dev/null 2>&1 \
+      || fail "provider '$p' not found (is the gateway running?);" \
+        "see docs/providers.md"
+  done
+  if openshell sandbox get "$name" >/dev/null 2>&1; then
+    fail "sandbox '$name' already exists; open a shell: pi-sandbox shell" \
+      "$name, or delete it: openshell sandbox delete $name"
+  fi
+}
+
+# Fail unless origin has branch $1 at commit $2, which the sandbox will clone.
+check_pushed() {
+  local ref="refs/heads/$1" remote
+  # ls-remote also lists refs that only end in $ref, such as refs/heads/x/$ref.
+  remote="$(git ls-remote origin "$ref" \
+    | awk -F '\t' -v ref="$ref" '$2 == ref { print $1 }')" \
+    || fail "could not read the branches of origin; see Git's message above"
+  [[ -n "$remote" ]] \
+    || fail "origin has no branch '$1'; push it first: git push -u origin HEAD"
+  [[ "$remote" == "$2" ]] \
+    || fail "origin has branch '$1' at another commit than HEAD;" \
+      "push or pull first"
+}
+
+# Create sandbox $1 with provider $2 and GIT_PROVIDER.
+create_sandbox() {
+  local name="$1" provider="$2"
+  # Web search needs the optional kagi provider (docs/providers.md).
+  local providers=(--provider "$provider" --provider "$GIT_PROVIDER")
+  if openshell provider get kagi >/dev/null 2>&1; then
+    providers+=(--provider kagi)
+  else
+    warn "provider 'kagi' not available, so this sandbox has no web search"
+  fi
+
+  # The microVM backend ignores ENV in the image, so the env vars are set here.
+  # PI_TELEMETRY=0 and PI_OFFLINE=1 turn off Pi's install report, version check,
+  # catalog refresh and tool downloads. GIT_TERMINAL_PROMPT=0 makes Git fail
+  # instead of waiting for a user name when it has no token.
+  # PI_CODING_AGENT_SESSION_DIR overrides a repo's sessionDir setting, which Pi
+  # reads before it asks whether to trust the repo, so that a branch can't
+  # make Pi write its sessions into the repo, where a commit would push them.
+  # --no-auto-providers: only the providers above, none made from tokens in
+  # the Mac's environment.
+  # --no-git-ignore only avoids a warning; neither upload is a folder.
+  # --detach: the main process (a login shell) runs in the background, and you
+  # work in separate `exec` shells, so exiting a shell doesn't end the sandbox.
+  # --restart-policy always: if the main process exits anyway, OpenShell
+  # restarts it instead of leaving the sandbox Completed.
+  openshell sandbox create --name "$name" --from "$IMAGE" \
+    "${providers[@]}" --no-auto-providers \
+    --env PI_CODING_AGENT_DIR="$PI_DIR" \
+    --env PI_CODING_AGENT_SESSION_DIR="$PI_DIR/sessions" \
+    --env PI_TELEMETRY=0 --env PI_OFFLINE=1 --env GIT_TERMINAL_PROMPT=0 \
+    --policy "$SCRIPT_DIR/policy.yaml" \
+    --upload "$SCRIPT_DIR/models.json:$PI_DIR/" \
+    --upload "$SCRIPT_DIR/policy.yaml:$PI_DIR/" \
+    --no-git-ignore \
+    --detach --restart-policy always
+}
+
+# Stop and start sandbox $1 once: a sandbox that has never been restarted can
+# fail to come back after a gateway restart (ai-openshell/OpenShell#4209).
+restart_once() {
+  warn "restarting '$1' once so it survives gateway restarts"
+  openshell sandbox stop "$1" && openshell sandbox start "$1"
+}
+
+# Let Git in sandbox $1 fetch from and push to repo $2 (OWNER/REPO.git) on
+# GitHub, and no other repo: the provider's endpoint allows only reading
+# (docs/adr/0004-git-host.md). OpenShell takes the endpoint and its extra
+# rules in separate updates, each with the rule's binaries. --wait returns
+# once the sandbox uses the rule.
+allow_repo() {
+  local name="$1" repo="$2" service
+  local rule=(--rule-name github_repo --binary /usr/bin/git --wait)
+  # `|| return`: run calls this in a condition, where set -e doesn't apply.
+  openshell policy update "$name" "${rule[@]}" \
+    --add-endpoint github.com:443:read-only:rest:enforce || return
+  for service in git-upload-pack git-receive-pack; do
+    openshell policy update "$name" "${rule[@]}" \
+      --add-allow "github.com:443:POST:/$repo/$service" || return
+  done
+}
+
+# In sandbox $1, clone repo $2 (OWNER/REPO.git) on branch $3 into WORK_DIR,
+# with the Git identity $4 and $5. sync writes the clone to disk: a stop right
+# after it could otherwise lose part of it.
+clone_repo() {
+  local name="$1" repo="$2" branch="$3" git_name="$4" git_email="$5" script
+  # shellcheck disable=SC2016 # expanded in the VM, from the arguments below
+  script='set -e
+git clone -c user.name="$4" -c user.email="$5" \
+  --branch "$3" -- "https://github.com/$2" "$1"
+sync'
+  openshell sandbox exec -n "$name" --no-login-shell -- /bin/sh -c "$script" \
+    sh "$WORK_DIR" "$repo" "$branch" "$git_name" "$git_email"
+}
+
+# Fail with message $2 about sandbox $1, which was created and is left over.
+fail_created() {
+  fail "$2; sandbox '$1' was created, delete it:" \
+    "openshell sandbox delete $1"
+}
+
+# Arguments: [PROVIDER] [NAME]. Create sandbox NAME with provider PROVIDER
+# (default: scaleway) and a clone of origin on the current branch, then open a
+# shell in it.
+run() {
+  local provider="${1:-scaleway}" name head branch repo git_name git_email
+
+  [[ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" == true ]] \
+    || fail "$PWD is not in a Git work tree"
+  name="$(name_or_default "${2:-}")"
+  head="$(git rev-parse -q --verify 'HEAD^{commit}')" \
+    || fail "the repo has no commits yet"
+  # Not --short: it returns heads/X when a tag X also exists.
+  branch="$(git symbolic-ref -q HEAD)" \
+    || fail "no branch is checked out;" \
+      "check out the branch the sandbox should start on"
+  branch="${branch#refs/heads/}"
+  git_name="$(git config user.name)" \
+    || fail "set user.name in Git; commits in the sandbox use it"
+  git_email="$(git config user.email)" \
+    || fail "set user.email in Git; commits in the sandbox use it"
+  repo="$(github_repo)"
+
+  check_prerequisites "$provider" "$name"
+  check_pushed "$branch" "$head"
+  if [[ -n "$(git status --porcelain)" ]]; then
+    warn "uncommitted changes and untracked files stay on the Mac"
+  fi
+
+  create_sandbox "$name" "$provider" \
+    || fail "creating sandbox '$name' failed; if 'openshell sandbox list'" \
+      "shows it, delete it: openshell sandbox delete $name"
+  restart_once "$name" || fail_created "$name" "restarting it failed"
+  allow_repo "$name" "$repo" \
+    || fail_created "$name" "allowing Git to reach $repo failed"
+  clone_repo "$name" "$repo" "$branch" "$git_name" "$git_email" \
+    || fail_created "$name" "cloning $repo failed (does the token cover it?)"
+  shell "$name"
+}
+
+# --- shell ---
+
+# Open a shell in the repo of running sandbox $1. Startup files are skipped:
+# code in the VM can write ~/.bashrc or ~/.profile and so change Pi's
+# environment, or ~/.inputrc and so change what a key types. `exec` hands the
+# terminal over.
+shell() {
+  local name
+  name="$(name_or_default "${1:-}")"
+  exec openshell sandbox exec -n "$name" --tty --no-login-shell \
+    --workdir "$WORK_DIR" -- \
+    /usr/bin/env INPUTRC=/dev/null /bin/bash --noprofile --norc
+}
+
+# --- ssh-config ---
+
+# Print the SSH config entry of sandbox $1, for an editor that uses the sandbox
+# as an SSH host: settings that keep the VM away from the Mac, then OpenShell's
+# entry. Commands sent over SSH skip ~/.profile, which code in the VM can
+# write, and nothing is forwarded: no SSH agent, no X11, and no ports, which
+# would make services in the VM reachable on the Mac.
+ssh_config() {
+  local name entry
+  name="$(name_or_default "${1:-}")"
+  # OpenShell prints an entry for any name, so check that the sandbox exists.
+  openshell sandbox get "$name" >/dev/null 2>&1 \
+    || fail "sandbox '$name' not found (is the gateway running?)"
+  entry="$(openshell sandbox ssh-config "$name")" \
+    || fail "could not get the SSH entry of sandbox '$name'"
+  # The settings go into a block of their own that comes first: ssh uses the
+  # first value it finds, so they hold whatever OpenShell's entry sets. Their
+  # block must match the entry's host, openshell-NAME.WORKSPACE.
+  [[ "$entry" == "Host openshell-$name."* ]] \
+    || fail "unexpected SSH entry from 'openshell sandbox ssh-config $name';" \
+      "not printing it"
+  cat <<EOF
+Host openshell-$name.*
+    SetEnv OPENSHELL_NO_LOGIN_SHELL=1
+    ForwardAgent no
+    ForwardX11 no
+    ClearAllForwardings yes
+$entry
+EOF
+}
+
+main() {
+  local cmd="${1:-}" arg
+  shift || true
+  # No command takes options, so that -h is never read as a provider or a name.
+  for arg in "$@"; do
+    case "$arg" in
+      -h | --help)
+        usage
+        return
+        ;;
+      -*)
+        warn "unknown option '$arg'"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  case "$cmd" in
+    setup)
+      setup
+      ;;
+    run)
+      require_openshell
+      run "$@"
+      ;;
+    shell)
+      require_openshell
+      shell "$@"
+      ;;
+    ssh-config)
+      require_openshell
+      ssh_config "$@"
+      ;;
+    "" | -h | --help | help)
+      usage
+      ;;
+    *)
+      warn "unknown command '$cmd'"
+      usage >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

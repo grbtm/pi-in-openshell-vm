@@ -1,0 +1,7 @@
+# Never commit credentials
+.env
+.env.*
+.DS_Store
+# Coding agents' local state
+.claude/worktrees/
+.claude/settings.local.json

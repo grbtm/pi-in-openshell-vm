@@ -1,0 +1,24 @@
+name: checks
+
+# Pushes to other branches are checked through their pull request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run shellcheck
+        run: shellcheck pi-sandbox pi-agent/git-hooks/prepare-commit-msg
+      - name: Run the search skill's tests
+        run: node --test pi-agent/skills/kagi-search/limit.test.mjs
+      - name: Check the search skill's formatting
+        run: npx prettier@3 --check pi-agent/skills/kagi-search/*.mjs

@@ -1,0 +1,61 @@
+# OpenShell's default policy, with this repo's changes marked "Not in the default".
+version: 1
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /usr
+    - /lib
+    - /proc
+    - /dev/urandom
+    - /etc
+    - /var/log
+  read_write:
+    - /tmp
+    - /dev/null
+    # Not in the default: terminals (PTYs) for Orca (docs/adr/0001-orca-via-ssh.md).
+    - /dev/ptmx
+    - /dev/pts
+    # Not in the default: Pi's config and sessions. Unlike /tmp, it survives
+    # `openshell sandbox stop`/`start`.
+    - /var/lib/pi-agent
+landlock:
+  # Not in the default (best_effort): refuse to start if the filesystem policy
+  # can't be applied in full.
+  compatibility: hard_requirement
+# Not in the default: read-only access (GET, HEAD, OPTIONS) to the hosts below
+# (docs/adr/0003-network-access.md). Add a host only if nobody else can publish
+# there and see the requests, and it doesn't fetch URLs it is given. Providers
+# add their own endpoints, and `pi-sandbox run` adds a rule for Git on the
+# sandbox's repo (docs/adr/0004-git-host.md); everything else is blocked.
+# `pi-sandbox run` also uploads this file for Pi, which reads the hosts from it.
+network_policies:
+  read_only:
+    endpoints:
+      # npm; scoped packages have %2F in the path
+      - { host: registry.npmjs.org, port: 443, protocol: rest, enforcement: enforce, access: read-only, allow_encoded_slash: true }
+      # PyPI
+      - { host: pypi.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: files.pythonhosted.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      # GitHub; release downloads redirect to release-assets
+      - { host: github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: api.github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: raw.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: codeload.github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: release-assets.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      # Docs
+      - { host: docs.github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: docs.docker.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: docs.nvidia.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: docs.python.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: developer.mozilla.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: nodejs.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      # Other sites
+      - { host: news.ycombinator.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    # node and Python run any code, so in practice this applies to any code in
+    # the VM. Python is listed by its real path, which `python3`, pip and
+    # virtual environments run.
+    binaries:
+      - path: /usr/local/bin/node
+      - path: /usr/bin/python3.13
+      - path: /usr/bin/curl
