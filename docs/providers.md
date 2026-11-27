@@ -45,7 +45,7 @@ unset PI_GITHUB_TOKEN
 
 On its own, the provider lets Git only list branches and tags on `github.com`; `pi-sandbox run` adds a rule that lets it fetch from and push to your repo ([ADR 0004](adr/0004-git-host.md)). The permission is the narrowest GitHub has for pushing, but GitHub also accepts the token for merging a pull request through its API (`api.github.com`). Pi can't do that, because OpenShell puts the token only into Git's requests to `github.com`. If you change the profile or the policy, keep the token off `api.github.com`.
 
-To use the token for another repo, change its repositories on GitHub, or create a new token and load it as in [Rotating a key](#rotating-a-key). Sandboxes for the repo it covered before then lose access.
+To use the token for another repo, change its repositories on GitHub, or create a new token and load it as in [Rotating a key](#rotating-a-key). Sandboxes for the repo it covered before then lose access. To keep sandboxes for both repos working, let one token cover both ([what that costs](../README.md#set-up-your-repo)).
 
 ## Scaleway Generative APIs (`scaleway`)
 
