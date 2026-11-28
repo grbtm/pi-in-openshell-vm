@@ -3,7 +3,7 @@
 # `pi-sandbox run` sets Pi's env vars when it creates the sandbox.
 
 # node:24-trixie-slim, pinned by digest. Pi needs Node >= 22.19.
-FROM node:24-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4
+FROM node:24-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4 AS base
 
 # fd and ripgrep are preinstalled because PI_OFFLINE=1 (set by pi-sandbox) turns
 # off Pi's own download of them.
@@ -41,7 +41,36 @@ RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSIO
 RUN usermod -l sandbox -d /sandbox node && groupmod -n sandbox node \
     && mkdir -p /sandbox /var/lib/pi-agent \
     && chown sandbox:sandbox /sandbox \
-    && chmod 1777 /var/lib/pi-agent
+    && chmod 777 /var/lib/pi-agent
+
+# The personal Pi config from pi-agent/personal/, of which .dockerignore lets in
+# only the config files (docs/adr/0006-personal-pi-config.md). Pi installs the
+# npm and git packages that settings.json lists, and the build fails if one
+# can't be installed; local paths need no install. npm's install scripts and
+# git dependencies stay off, but a git package's own .npmrc still configures
+# npm. So this runs in a stage of its own, and the image takes only Pi's config
+# folder from it.
+# The files are made readable and writable for all, because owners don't
+# survive (comment above).
+FROM base AS personal
+COPY pi-agent/personal/ /var/lib/pi-agent/
+RUN if [ -f /var/lib/pi-agent/settings.json ]; then \
+        PI_CODING_AGENT_DIR=/var/lib/pi-agent PI_TELEMETRY=0 \
+        npm_config_ignore_scripts=true npm_config_allow_git=none node -e ' \
+            const sources = (require("/var/lib/pi-agent/settings.json").packages ?? []) \
+                .map((entry) => entry.source ?? entry) \
+                .filter((source) => source.match(/^(npm|git|https?|ssh):/)); \
+            for (const source of sources) { \
+                child_process.execFileSync("pi", ["install", source], { stdio: "inherit" }); \
+            } \
+        '; \
+    fi \
+    && chmod -R a+rwX /var/lib/pi-agent
+
+# The personal config comes before the image's own files, so that those replace
+# files at the same paths.
+FROM base
+COPY --from=personal /var/lib/pi-agent/ /var/lib/pi-agent/
 
 # Pi's skills, with the npm dependencies of those that have a lockfile, and
 # Pi's global context file. That file is named sandbox-context.md in the repo,

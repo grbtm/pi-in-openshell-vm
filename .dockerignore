@@ -1,4 +1,18 @@
-# The image needs only Pi's context file, skills and Git config from the build context.
+# The image needs only Pi's context file, skills and Git config from the build
+# context, and from the personal Pi config in pi-agent/personal/ only the config
+# files below (docs/adr/0006-personal-pi-config.md). Everything else there stays
+# out: Pi's credentials and state, models.json, and context files that would
+# replace the sandbox's AGENTS.md.
 *
 !pi-agent/
+pi-agent/personal/*
+!pi-agent/personal/settings.json
+!pi-agent/personal/keybindings.json
+!pi-agent/personal/mcp.json
+!pi-agent/personal/SYSTEM.md
+!pi-agent/personal/APPEND_SYSTEM.md
+!pi-agent/personal/extensions/
+!pi-agent/personal/skills/
+!pi-agent/personal/prompts/
+!pi-agent/personal/themes/
 pi-agent/**/*.test.mjs
