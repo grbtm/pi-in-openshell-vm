@@ -1,0 +1,36 @@
+# Mistral's Chat Completions API, for Pi's built-in mistral provider. The key
+# works only for POST /v1/chat/completions, the one call Pi makes; Mistral's
+# other APIs stay blocked.
+
+id: mistral
+display_name: Mistral Chat Completions API
+description: Mistral's models, limited to POST /v1/chat/completions
+category: inference
+inference_capable: true
+
+credentials:
+  - name: api_key
+    description: Mistral API key (in a workspace with a spending limit)
+    env_vars:
+      - MISTRAL_API_KEY
+    required: true
+    auth_style: bearer
+    header_name: authorization
+
+discovery:
+  credentials:
+    - api_key
+
+endpoints:
+  - host: api.mistral.ai
+    port: 443
+    path: /v1/chat/completions
+    protocol: rest
+    enforcement: enforce
+    rules:
+      - allow:
+          method: POST
+          path: /v1/chat/completions
+
+binaries:
+  - /usr/local/bin/node

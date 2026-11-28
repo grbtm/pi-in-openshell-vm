@@ -5,7 +5,7 @@ How to register the providers a sandbox uses, add models and rotate a key.
 A provider is two things under one name, for example `scaleway`:
 
 - In OpenShell: an allow rule for one service's API, with the service's key if it has one. It is made from a profile (`providers/*.yaml`).
-- In Pi: the list of a model provider's models. It is an entry in `models.json`, or built into Pi for Anthropic.
+- In Pi: the list of a model provider's models. It is an entry in `models.json`, or built into Pi.
 
 A model provider serves a model. The other providers are for Git and web search.
 
@@ -16,6 +16,7 @@ Every sandbox needs `github-git` and one model provider; `pi-sandbox run` also a
 | `github-git` | Git in the VM: cloning, fetching and pushing your repo. Required. | `PI_GITHUB_TOKEN` |
 | `scaleway` | Hosted open-weight models. The default model provider of `pi-sandbox run`. | `SCW_SECRET_KEY` |
 | `anthropic` | Claude models. | `ANTHROPIC_API_KEY` |
+| `mistral` | Models hosted by Mistral. | `MISTRAL_API_KEY` |
 | `llama-server` | A local model. | none |
 | `kagi` | Web search. Optional. | `KAGI_API_KEY` |
 
@@ -71,6 +72,18 @@ ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY openshell provider create --name anthropic 
 unset ANTHROPIC_API_KEY
 ```
 
+## Mistral (`mistral`)
+
+In Mistral's Admin Panel, create a workspace with a monthly spending limit, and an API key in it, with an expiry date. Share no connectors with that workspace: code in the VM could use them. Pi has the Mistral models built in, those of its version in `Dockerfile.pi`; for newer ones, upgrade Pi ([Upgrading](troubleshooting.md#upgrading)). The provider allows only `POST /v1/chat/completions`.
+
+```sh
+read -rs "MISTRAL_API_KEY?Key: "; echo
+openshell profile lint   -f providers/mistral.yaml
+openshell profile import -f providers/mistral.yaml
+MISTRAL_API_KEY=$MISTRAL_API_KEY openshell provider create --name mistral --type mistral --from-existing
+unset MISTRAL_API_KEY
+```
+
 ## Local llama-server (`llama-server`)
 
 No key. Start it in its own terminal and leave it running, with one of the models in `models.json`. On a Mac with 16 GB:
@@ -119,7 +132,7 @@ unset KAGI_API_KEY
 
 ## Other models
 
-`models.json` lists the models of each model provider except Anthropic, and `pi-sandbox run` copies it into every new sandbox. To use other models, edit it ([Pi's format](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md)); a new provider also needs a profile in `providers/`. Refer to a key as `${VAR}`, with the variable named under `env_vars` in the provider's profile; in the VM it resolves to the placeholder. Never put a literal key into `models.json`, and never run Pi's `/login` in the VM: both put a real key where code in the VM can read it.
+`models.json` lists the models of each model provider that Pi doesn't have built in, and `pi-sandbox run` copies it into every new sandbox. To use other models, edit it ([Pi's format](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md)); a new provider also needs a profile in `providers/`. Refer to a key as `${VAR}`, with the variable named under `env_vars` in the provider's profile; in the VM it resolves to the placeholder. Never put a literal key into `models.json`, and never run Pi's `/login` in the VM: both put a real key where code in the VM can read it.
 
 ## Models and thinking levels
 
